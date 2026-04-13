@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>获取你的奇妙事件</title>
+    <style>
+        /* 基础样式和背景过渡效果 */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #fdf6e3, #e0f7fa);
+            background-size: 400% 400%;
+            transition: background 1s ease-in-out;
+        }
+
+        /* 卷轴外部的容器 */
+        #scroll-container {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 卷轴的上下两根“木轴” */
+        .scroll-roller {
+            width: 340px;
+            height: 20px;
+            background: #8b5a2b;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 10; /* 木轴要在最上层 */
+        }
+
+        /* 卷轴的纸张部分 */
+        #scroll-paper {
+            width: 300px;
+            max-height: 0; 
+            overflow: hidden;
+            background-color: #fff9e6;
+            border-left: 2px solid #deb887;
+            border-right: 2px solid #deb887;
+            box-shadow: inset 0 0 20px rgba(222, 184, 135, 0.5);
+            transition: max-height 1.2s cubic-bezier(0.25, 1, 0.5, 1); 
+            position: relative; /* 为了让烟雾能在纸张里绝对定位 */
+        }
+
+        #scroll-paper.open {
+            max-height: 400px; 
+        }
+
+        /* 🌟 新增：烟雾层特效 */
+        #smoke-layer {
+            position: absolute;
+            top: -50px; left: -50px; right: -50px; bottom: -50px;
+            /* 用径向渐变画出一团浓郁的白雾 */
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 40%, rgba(255,255,255,0) 70%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* 烟雾飘散的动画规则 */
+        @keyframes clearSmoke {
+            0% { opacity: 1; transform: scale(0.8) translateY(30px); filter: blur(5px); }
+            40% { opacity: 1; transform: scale(1.2) translateY(0); filter: blur(10px); }
+            100% { opacity: 0; transform: scale(1.6) translateY(-40px); filter: blur(20px); }
+        }
+
+        /* 当给烟雾加上 active 类时，播放烟雾飘散动画 */
+        #smoke-layer.active {
+            animation: clearSmoke 2s ease-in-out forwards;
+        }
+
+        /* 祝福文字的样式（修改为默认模糊、透明） */
+        #blessing-text {
+            font-size: 22px;
+            color: #d33682;
+            padding: 40px 20px;
+            text-align: center;
+            line-height: 1.6;
+            font-weight: bold;
+            position: relative;
+            z-index: 2;
+            
+            /* 初始状态：完全透明且严重模糊 */
+            opacity: 0;
+            filter: blur(15px);
+            transform: scale(0.9);
+            /* 过渡动画：慢慢变得清晰、不透明、放大回正常比例 */
+            transition: opacity 1.8s ease-out, filter 1.8s ease-out, transform 1.8s ease-out;
+        }
+
+        /* 当给文字加上 reveal 类时，文字浮现 */
+        #blessing-text.reveal {
+            opacity: 1;
+            filter: blur(0);
+            transform: scale(1);
+        }
+
+        /* 抽奖按钮样式 */
+        button {
+            padding: 15px 40px;
+            font-size: 22px;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #c92a2a;
+            transition: all 0.1s;
+            font-weight: bold;
+        }
+
+        button:active {
+            box-shadow: 0 2px 0 #c92a2a;
+            transform: translateY(4px);
+        }
+
+        /* 震动动画 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        .shaking {
+            animation: shake 0.4s infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="scroll-container">
+        <div class="scroll-roller"></div>
+        
+        <div id="scroll-paper">
+            <div id="smoke-layer"></div>
+            <div id="blessing-text"></div>
+        </div>
+        
+        <div class="scroll-roller"></div>
+    </div>
+
+    <button id="draw-btn" onclick="startDraw()">看看我的奇妙事件</button>
+
+    <script>
+       const blessings = [
+    "2087年买彩票中奖500万！",
+    "随便走进一家店，老板被你的王者之气震慑，当场决定把店送给你。",
+    "你的钱包获得了自动繁殖能力，里面的百元大钞每天都在进行细胞分裂。",
+    "走在路上随便踢了一块小石头，正好砸中了逃亡十年的星际大盗，喜提一个亿赏金。",
+    "洗衣服时丢进去一个斧头，洗完捞出来一个金斧头。",
+    "你的工位因为风水太好，长出了一棵摇钱树，键盘敲一下掉一个金币。",
+    "下楼倒垃圾，正好在垃圾桶旁捡到一张通往霍格沃茨的录取通知书。",
+    "去徐汇吃火锅，涮进去的羊肉卷捞出来竟然变成了百元大钞（干燥不烫手状态）。",
+    "随便在纸上画了个圈，结果召唤出了一只每天按时帮你做家务的史莱姆。",
+    "喝可乐打出的嗝，音律竟然完美符合贝多芬的《命运交响曲》。",
+    "你的床因为太舍不得你，偷偷向公司请了假，并强行封印了你一整天。",
+    "点外卖填错地址，结果是外星飞碟用光速把餐送到了你嘴边。",
+    "只要你深呼吸，就能吸收方圆十里内所有的欧气。",
+    "吃外卖不仅没长胖，反而长出了八块腹肌。",
+    "只要你盯着红灯看三秒，交通系统就会因为羞涩而立刻转绿。",
+    "洗澡的时候稍微哼了两句，花洒当场决定签约你并送你出道。",
+    "随便发条朋友圈，点赞的人数超过了地球总人口，多出来的全是外星人。",
+    "你的影子因为觉得太无聊，每天趁你睡觉时去帮你排队买限量版手办/抢签售。",
+    "闭着眼睛下棋，棋子们为了不让你输，自己进化出了究极羁绊。",
+    "玩肉鸽游戏开局选错属性，结果系统判定你触发了亿分之一的“天选逆神”隐藏结局。",
+    "手机黑屏状态下随手一划，不仅抽出了限定SSR，而且十连十金。",
+    "哪怕用计算器玩3A大作，帧率也能稳定在 144 fps 丝滑不卡顿。",
+    "你组建的阵容强度太高，策划连夜买站票过来求你削弱自己。",
+    "随便捏个脸，直接被评为本世纪最具跨时代意义的虚拟艺术品。",
+    "游戏里的NPC因为太敬仰你，跨越屏幕给你点了一杯冰镇奶茶。",
+    "在新手村迷路，意外闯入开发者测试房，满汉全席顶级装备任你挑。",
+    "你的账号被游戏之神赐福，所有普通白装都自带全屏秒杀特效。",
+    "玩格斗游戏因为手滑搓出了乱码，结果打出了一套连招成为新的传说。",
+    "下副本时，BOSS为了不被你打，主动交出掉落物并为你表演了一段单口相声。",
+    "只要是你玩的职业/推的角色，下个版本必定被加强到无法无天的地步。",
+    "玩大富翁扔骰子，骰子为了你直接碎成了粉末，判你买下整个世界。",
+    "策划案写得太好，打印机一边打一边感动得流下了五颜六色的墨水。",
+    "下次开会时，你的座位将自带悬浮和背部理疗功能，具有睡眠舱形态。",
+    "游戏引擎因为觉得你太辛苦，半夜自己爬起来把接下来的功能做完了。",
+    "下个版本上线时，零Bug零报错，连文档里的标点符号都不用改。",
+    "你设计的内容让AI都大呼“这简直是碳基生物的奇迹，我永远做不出来”。",
+    "你的草图被卢浮宫连夜打包运走，作为本世纪末的镇馆之宝。",
+    "电脑死机前的一秒钟，Word文档竟然靠着强烈的求生欲自己点了保存。",
+    "玩家对你的设计满意度高达 999%，多出来的票数是其他维度的玩家投的。",
+    "Excel表格因为你的内容太完美而闪现出耀眼的彩虹。",
+    "你的硬盘容量突然发生了量子膨胀，哪怕装满全网资源也永远显示空余。",
+    "你的鼠标长出了腿，每天早上帮你买好早饭并在桌上待命。",
+    "你追的作者为了不断更，连夜研究出时间机器回到过去给你爆更了一百万字。",
+    "看动漫时，屏幕里的机甲感应到了你的脑电波，隔空认你做了最高指挥官。",
+    "随手买的盲盒，拆开里面装的居然是一个隐隐隐隐隐隐隐藏版。",
+    "抢演唱会门票，大麦网的服务器为了你专门开辟了一条VIP超光速通道。",
+    "戴上VR眼镜，结果直接肉身穿越到了修仙界，落地就是满级大能。",
+    "看悬疑小说，书页里的凶手被你的智商吓得直接跳出书本投案自首了。",
+    "你在二手市场买的老旧游戏机，一开机竟然能连接到3000年后的赛博网络。",
+    "看电影因为太投入，直接获得了主角的超能力，并自动保留了72小时。",
+    "你买的周边在半夜自己开了一场神秘仪式，召唤出了一台无限续杯的奶茶机。",
+    "玩剧本杀不仅盘出了真凶，还顺手破获了一起跨国网络悬案。",
+    "你的耳机线不仅再也不会打结，还能自动翻译宇宙中所有物种的语言。",
+    "在漫展上随便摆了个Pose，直接登上了次日全球顶尖时尚杂志的封面。",
+    "你的音乐播放器偷偷连接了平行宇宙，每天给你放另一个维度的抖腿神曲。",
+    "你的指纹不小心解开了古代遗迹的密码，合法继承了外星文明的全部遗产。",
+    "只要你打个响指，方圆一公里内的蚊子就会被降维打击，原地蒸发。",
+    "乘电梯时电梯由于太喜欢你，直接带你突破楼顶飞向了平流层看日出。",
+    "你用的笔在没墨的时候，会自动抽取空气中的暗物质继续高亮书写。",
+    "你的眼镜自带AI分析系统，看一眼就能显示所有人的战斗力、幸运值和掉落物。",
+    "打哈欠产生的强烈气流，正好把太平洋上的一场台风给吹回了老家。",
+    "你的剪刀在裁纸时触发了空间切割，不小心打开了通往任意门的通道。",
+    "走在路上被雷劈中，非但没事，还顺便给手机充满了未来一百年的电量。",
+    "你种的仙人掌不仅开了花，还结出了航海王中随机一个恶魔果实。",
+    "去超市买到的牙膏永远挤不完，且每天都是不同口味的米其林高级甜品味。",
+    "只要你一闭上眼睛，就能自动在脑海里无广告高清播放全网所有VIP视频。",
+    "你的鞋底安装了反重力装置，即使是在早高峰的地铁里也能双脚离地悬空休息。",
+    "你拥有了给万物一键静音的能力，只要你看一眼，装修电钻声立刻变成轻音乐。",
+    "今天不管买什么东西，扫码支付时都会触发系统的“因你太酷而免单”隐藏程序。",
+    "你可以将所有的“拖延症”实体化变成一只小狗，并且每天让它去替你上班。",
+    "你获得了“绝对不卡牙缝”的超能力，吃金针菇和芒果都如丝般顺滑。",
+    "只要你不想聊天，你的大脑会自动生成一个极其逼真的全息投影替你跟人寒暄。",
+    "你的水杯连接着不老泉，喝一口直接清空疲劳值，重返18岁巅峰体力。",
+    "游戏内所有的“50%概率”，对你来说都是100%。",
+    "玩自走棋，想刷的牌总是第一时间发到你手上。",
+    "打游戏时网络延迟永远保持在个位数。",
+    "你推的角色/明星，每天一张绝美新神图。",
+    "写的代码一次编译通过，0 Warning 0 Error。",
+    "服务器极其稳定，这周绝对不需要半夜爬起来修档。",
+    "做的数值平衡完美无瑕。",
+    "突然发现了一个开源的神仙插件，直接省去一周工作量。",
+    "吃泡面不仅有调料包，里面还附赠了双份脱水蔬菜。",
+    "剥小龙虾一绝，轻轻一捏就能拉出完整的虾线。",
+    "买西瓜不用敲，切开就是薄皮沙瓤神仙瓜。",
+    "共享单车一眼望去，不仅有车，还是一辆崭新好骑的。",
+    "漫展抢票一发入魂，丝毫不卡顿。",
+    "补老番时，突然找到了1080P极清修复版。",
+    "你磕的CP在最新一话/一作直接结婚，官方猛猛塞糖。",
+    "喜欢的神级声优宣布配了你最期待的角色。",
+    "去看线下Live，买到的位置绝佳，且歌手/爱豆邀请你去台上互动。",
+    "喜欢的乐队突然宣布要来你的城市开巡演。",
+    "在二手平台以不可思议的低价捡漏了绝版周边。",
+    "今天的睡眠质量堪比婴儿，一觉醒来神清气爽。",
+    "剪了一个惊艳全场的完美发型，理发师完全听懂了你的话。",
+    "周末的天气极其配合，你想出门就晴天，你想宅家就下雨。",
+    "你遇到的所有小麻烦，都会在三秒内反转成大惊喜！",
+    "你的微波炉突然连接了平行宇宙，热个包子顺便带回了恐龙时代的绝版烤肉。",
+    "下班路上被UFO吸走，外星人不仅请你吃了顿烧烤，还帮你把明天的活干完了。",
+    "随手一指天空，一颗流星为了配合你的手势，当场表演了一个锐角转弯。",
+    "只要你大喊一声“退下”，周围十公里内的蚊子就会列队向你敬礼并切腹自尽。",
+    "随便敲打两下键盘，不小心向全宇宙发送了和平广播，获得了三体人的最高荣誉勋章。",
+    "下楼买个酱油，因为步伐太过于风骚，被路过的星际探照灯选为地球最帅碳基生物。",
+    "点的珍珠奶茶里的珍珠全是大个的深海夜明珠，喝完直接实现财富自由。",
+    "楼下煎饼果子摊的老板其实是退隐的食神，今天特意在你的煎饼里加了长生不老药。",
+    "只要你对着白开水许愿，它就会立刻变成你最想喝的任何绝版神仙快乐水。",
+    "切洋葱时洋葱被你的气场感动，不但没让你流泪，自己反而哭出了十克拉的钻石。",
+    "你的外卖保温袋其实是四次元口袋，掏完外卖还能再掏出一整桌满汉全席。",
+    "只要你拿起勺子，方圆五百米内的甜品就会自动飞到你嘴边排队等你品尝。",
+    "你的零食柜其实连接着零食宇宙，永远都吃不完，且每次拿出来的都是你最馋的口味。",
+    "点了一杯咖啡，拉花图案居然是一张藏宝图，照着挖直接挖出了秦始皇的私房钱。",
+    "你写的bug因为太具有艺术性，被MOMA现代艺术博物馆以五千万美金收藏。",
+    "只要你一登录游戏，全服所有的Boss都会立刻放下武器并为你跳起女团舞。",
+    "你敲击键盘的频率恰好解开了金字塔的密码，法老王连夜发顺丰给你寄来了一箱黄金。",
+    "你用的修图软件因为承受不住你的才华，在渲染时直接爆炸并开出了一朵玫瑰花。",
+    "只要你对着电脑说一句“求求了”，所有的加载条都会直接跳到100%。",
+    "只要你随便哼一首歌，周围的树叶都会立刻停止飘落，为你伴舞。",
+    "你的公交卡由于刷了太多次，直接升级为了能在银河系所有星际列车通用的黑卡。",
+    "去倒垃圾时，垃圾桶因为觉得你的垃圾太香，直接开口说了一句“谢谢老板，下次还来”。",
+    "只要你在路边随便招一下手，就会有一辆加长林肯漂移过来停在你面前请你上车。",
+    "只要你对天空比个心，天上的云彩就会立刻变成你最喜欢的二次元角色的样子。",
+    "你的笑容因为太有感染力，被世界卫生组织列为能包治百病的唯一指定特效药。",
+    "只要你深吸一口气，就能立刻分辨出今天风里夹杂的每一粒灰尘是从哪个国家吹来的。",
+    "你的声音因为太好听，只要一开口说话，周围十公里内的鸟类就会集体为你伴唱。"
+];
+
+        const backgroundColors = [
+            "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)", // 猛男粉
+            "linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)", // 赛博紫
+            "linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)", // 护眼绿
+            "linear-gradient(to top, #ffd194 0%, #70e1f5 100%)", // 阳光沙滩
+            "linear-gradient(to right, #4facfe 0%, #00f2fe 100%)" // 科技蓝
+        ];
+
+        function startDraw() {
+            const container = document.getElementById("scroll-container");
+            const paper = document.getElementById("scroll-paper");
+            const textEl = document.getElementById("blessing-text");
+            const smokeEl = document.getElementById("smoke-layer");
+            const btn = document.getElementById("draw-btn");
+
+            // 禁用按钮防误触
+            btn.disabled = true;
+            btn.innerText = "正在卜算...";
+
+            // 更换随机背景
+            const randomBg = backgroundColors[Math.floor(Math.random() * backgroundColors.length)];
+            document.body.style.background = randomBg;
+
+            // 收起卷轴，重置状态（清除烟雾动画和文字的清晰状态）
+            paper.classList.remove("open");
+            textEl.classList.remove("reveal");
+            smokeEl.classList.remove("active");
+            
+            // 强制浏览器刷新一次状态，保证下次动画能正常触发
+            void smokeEl.offsetWidth; 
+
+            setTimeout(() => {
+                // 卷轴开始震动
+                container.classList.add("shaking");
+
+                // 震动1秒后
+                setTimeout(() => {
+                    // 停止震动
+                    container.classList.remove("shaking");
+                    
+                    // 抽取文字并填入
+                    const randomIndex = Math.floor(Math.random() * blessings.length);
+                    textEl.innerText = blessings[randomIndex];
+
+                    // 1. 卷轴展开
+                    paper.classList.add("open");
+                    // 2. 烟雾开始喷发飘散
+                    smokeEl.classList.add("active");
+
+                    // 3. 稍微等0.3秒，等烟雾盖住纸张后，文字再慢慢变得清晰
+                    setTimeout(() => {
+                        textEl.classList.add("reveal");
+                        
+                        // 按钮恢复可用状态
+                        btn.disabled = false;
+                        btn.innerText = "再来一次！";
+                    }, 300);
+
+                }, 1000); 
+
+            }, 300);
+        }
+    </script>
+</body>
+</html>
